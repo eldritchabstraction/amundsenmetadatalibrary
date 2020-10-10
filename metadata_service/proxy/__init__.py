@@ -32,7 +32,7 @@ def get_proxy_client() -> BaseProxy:
             port = current_app.config[config.PROXY_PORT]
             user = current_app.config[config.PROXY_USER]
             password = current_app.config[config.PROXY_PASSWORD]
-            encrypted = current_app.config[config.PROXY_ENCRYPTED]
+            encrypted = False # current_app.config[config.PROXY_ENCRYPTED]
             validate_ssl = current_app.config[config.PROXY_VALIDATE_SSL]
 
             client = import_string(current_app.config[config.PROXY_CLIENT])
