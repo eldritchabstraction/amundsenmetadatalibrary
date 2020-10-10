@@ -94,7 +94,7 @@ class Neo4jProxy(BaseProxy):
 
         readers = self._exec_usage_query(table_uri)
 
-        wmk_results, table_writer, timestamp_value, owners, tags, source, badges, prog_descs = \
+        wmk_results, table_writer, timestamp_value, owners, tags, source, badges, prog_descs, downstream, upstream = \
             self._exec_table_query(table_uri)
 
         table = Table(database=last_neo4j_record['db']['name'],
@@ -115,7 +115,7 @@ class Neo4jProxy(BaseProxy):
                       programmatic_descriptions=prog_descs
                       )
 
-        return table
+        return table, upstream, downstream
 
     @timer_with_counter
     def _exec_col_query(self, table_uri: str) -> Tuple:
@@ -206,6 +206,8 @@ class Neo4jProxy(BaseProxy):
         OPTIONAL MATCH (tbl)-[:HAS_BADGE]->(badge:Badge)
         OPTIONAL MATCH (tbl)-[:SOURCE]->(src:Source)
         OPTIONAL MATCH (tbl)-[:DESCRIPTION]->(prog_descriptions:Programmatic_Description)
+        OPTIONAL MATCH (tbl)<-[:DOWNSTREAM]-(downstream_table)
+        OPTIONAL MATCH (tbl)<-[:UPSTREAM]-(upstream_table)
         RETURN collect(distinct wmk) as wmk_records,
         application,
         t.last_updated_timestamp as last_updated_timestamp,
@@ -213,7 +215,9 @@ class Neo4jProxy(BaseProxy):
         collect(distinct tag) as tag_records,
         collect(distinct badge) as badge_records,
         src,
-        collect(distinct prog_descriptions) as prog_descriptions
+        collect(distinct prog_descriptions) as prog_descriptions,
+        collect(distinct downstream_table) as downstream_tables,
+        collect(distinct upstream_table) as upstream_tables
         """)
 
         table_records = self._execute_cypher_query(statement=table_level_query,
@@ -221,6 +225,21 @@ class Neo4jProxy(BaseProxy):
                                                                'tag_normal_type': 'default'})
 
         table_records = table_records.single()
+
+        downstream_tables = []
+        if table_records.get('downstream_tables'):
+            tables = table_records['downstream_tables']
+            for table in tables:
+                key = table['key']
+                downstream_tables.append(key)
+
+
+        upstream_tables = []
+        if table_records.get('upstream_tables'):
+            tables = table_records['upstream_tables']
+            for table in tables:
+                key = table['key']
+                upstream_tables.append(key)
 
         wmk_results = []
         table_writer = None
@@ -279,7 +298,7 @@ class Neo4jProxy(BaseProxy):
             table_records.get('prog_descriptions', [])
         )
 
-        return wmk_results, table_writer, timestamp_value, owner_record, tags, src, badges, prog_descriptions
+        return wmk_results, table_writer, timestamp_value, owner_record, tags, src, badges, prog_descriptions, downstream_tables, upstream_tables
 
     def _extract_programmatic_descriptions_from_query(self, raw_prog_descriptions: dict) -> list:
         prog_descriptions = []

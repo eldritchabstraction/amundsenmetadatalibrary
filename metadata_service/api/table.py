@@ -17,6 +17,9 @@ from metadata_service.entity.resource_type import ResourceType
 from metadata_service.entity.dashboard_summary import DashboardSummarySchema
 from metadata_service.exception import NotFoundException
 from metadata_service.proxy import get_proxy_client
+import logging
+
+LOGGER = logging.getLogger(__name__)
 
 
 class TableDetailAPI(Resource):
@@ -30,12 +33,19 @@ class TableDetailAPI(Resource):
     @swag_from('swagger_doc/table/detail_get.yml')
     def get(self, table_uri: str) -> Iterable[Union[Mapping, int, None]]:
         try:
-            table = self.client.get_table(table_uri=table_uri)
+            table, upstream, downstream = self.client.get_table(table_uri=table_uri)
             schema = TableSchema(strict=True)
-            return schema.dump(table).data, HTTPStatus.OK
+            data = schema.dump(table).data
+            data['upstream'] = upstream
+            data['downstream'] = downstream
+            return data, HTTPStatus.OK
 
         except NotFoundException:
             return {'message': 'table_uri {} does not exist'.format(table_uri)}, HTTPStatus.NOT_FOUND
+        except Exception as e:
+            LOGGER.error("Error", e)
+            raise e
+
 
 
 class TableOwnerAPI(Resource):
